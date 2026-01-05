@@ -77,6 +77,7 @@ const ApiAutoGenerate: React.FC = () => {
   const [categories, setCategories] = useState<ApiCategory[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [form] = Form.useForm();
+  const [formValues, setFormValues] = useState<any>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -185,6 +186,7 @@ const ApiAutoGenerate: React.FC = () => {
 
   const handlePreview = async () => {
     const values = await form.validateFields();
+    setFormValues(values);
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -224,7 +226,13 @@ const ApiAutoGenerate: React.FC = () => {
       return;
     }
 
-    const values = await form.validateFields();
+    const values = formValues;
+    if (!values) {
+      message.error('表单数据丢失，请重新开始');
+      setCurrentStep(0);
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -481,9 +489,9 @@ const ApiAutoGenerate: React.FC = () => {
               <Form.Item
                 name="category"
                 label="API分类"
-                initialValue="default"
+                rules={[{ required: true, message: '请选择API分类' }]}
               >
-                <Select loading={categoriesLoading}>
+                <Select loading={categoriesLoading} placeholder="请选择API分类">
                   {categories.filter(cat => cat.status === 'active').map(cat => (
                     <Select.Option key={cat.code} value={cat.code}>
                       {cat.name}

@@ -67,7 +67,9 @@ router.get('/datasources/:datasourceId/tables/:tableName/schema', authorizeRoles
 
 router.post('/generate', authorizeRoles('admin', 'developer'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { datasourceId, tableName, apiName, apiPath, category = 'default', status = 'draft', selectedAPIs = [] } = req.body;
+    const { datasourceId, tableName, apiName, apiPath, category, status = 'draft', selectedAPIs = [] } = req.body;
+
+    logger.info(`Generate API request - category: ${category}, category type: ${typeof category}, category is undefined: ${category === undefined}`);
 
     if (!datasourceId || !tableName) {
       res.status(400).json({ error: 'datasourceId and tableName are required' });
@@ -125,11 +127,13 @@ router.post('/generate', authorizeRoles('admin', 'developer'), async (req: AuthR
 
     const createdAPIs: any[] = [];
 
+    const timezoneOffset = await getTimezoneOffset();
+
     for (const api of filteredAPIs) {
       logger.info(`Processing API: ${api.method} ${api.path}, sql_template: ${api.sql_template}, status: ${status}`);
 
       const result = await run(
-        'INSERT INTO apis (name, path, method, description, datasource_id, sql_template, status, require_auth, category, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO apis (name, path, method, description, datasource_id, sql_template, status, require_auth, category, created_by, timezone_offset, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           api.name,
           api.path,
@@ -140,7 +144,9 @@ router.post('/generate', authorizeRoles('admin', 'developer'), async (req: AuthR
           status,
           1,
           category,
-          req.userId
+          req.userId,
+          timezoneOffset,
+          getBeijingTime(timezoneOffset)
         ]
       );
 
@@ -172,8 +178,6 @@ router.post('/generate', authorizeRoles('admin', 'developer'), async (req: AuthR
         description: api.description
       });
     }
-
-    const timezoneOffset = await getTimezoneOffset();
 
     await run(
       'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
