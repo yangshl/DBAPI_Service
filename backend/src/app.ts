@@ -29,6 +29,7 @@ const app: Application = express();
 let PORT = process.env.PORT || 3000;
 let HOST = process.env.HOST || '0.0.0.0';
 
+app.set('trust proxy', true);
 app.use(helmet());
 app.use(cors());
 app.use(compression());
@@ -40,6 +41,26 @@ app.use(requestLogger);
 
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/debug/ip', (req: Request, res: Response) => {
+  const headers = {
+    'x-forwarded-for': req.headers['x-forwarded-for'],
+    'x-real-ip': req.headers['x-real-ip'],
+    'cf-connecting-ip': req.headers['cf-connecting-ip'],
+    'true-client-ip': req.headers['true-client-ip'],
+    'x-cluster-client-ip': req.headers['x-cluster-client-ip'],
+    'remote-addr': req.connection?.remoteAddress,
+    'req-ip': req.ip,
+  };
+  
+  res.json({
+    timestamp: new Date().toISOString(),
+    clientIp: req.ip,
+    remoteAddress: req.connection?.remoteAddress,
+    headers: headers,
+    proxyTrust: app.get('trust proxy')
+  });
 });
 
 app.use('/api/auth', authRoutes);

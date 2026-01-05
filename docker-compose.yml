@@ -12,15 +12,13 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
-      - LOG_LEVEL=info
+      - LOG_LEVEL=debug
     volumes:
       - backend-data:/app/data
       - ./backend/dbapi_service.db:/app/dbapi_service.db
-    networks:
-      - dbapi-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -32,15 +30,13 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_BACKEND_PROTOCOL=http
-        - VITE_BACKEND_HOST=backend
+        - VITE_BACKEND_HOST=localhost
         - VITE_BACKEND_PORT=3000
     container_name: dbapi-frontend
     ports:
       - "80:80"
     depends_on:
       - backend
-    networks:
-      - dbapi-network
     restart: unless-stopped
 
 volumes:
