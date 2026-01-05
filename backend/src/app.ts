@@ -112,7 +112,7 @@ async function startServer() {
       }
     }
 
-    server.listen(PORT, HOST, () => {
+    server.listen(Number(PORT), HOST, () => {
       logger.info(`Server is running on http://${HOST}:${PORT}`);
       logger.info(`Environment: ${process.env.NODE_ENV}`);
     });

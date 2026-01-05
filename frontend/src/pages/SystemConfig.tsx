@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Tabs, Table, Button, Space, Tag, Modal, message, Input, Form, Card, Typography, Popconfirm, Switch, Select } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
-import { usePermissions } from '../contexts/PermissionContext';
+import { Tabs, Table, Button, Space, Tag, Modal, message, Input, Form, Card, Popconfirm, Switch, Select } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 
-const { Text } = Typography;
 const { TabPane } = Tabs;
 
 interface ApiCategory {
@@ -26,14 +24,7 @@ interface IpWhitelist {
   updated_at: string;
 }
 
-interface SystemSetting {
-  key: string;
-  value: string;
-  description: string;
-}
-
 const SystemConfig: React.FC = () => {
-  const { hasPermission } = usePermissions();
   const [activeTab, setActiveTab] = useState('categories');
   
   const [categories, setCategories] = useState<ApiCategory[]>([]);
@@ -359,6 +350,14 @@ const SystemConfig: React.FC = () => {
         }
       }
 
+      if (key === 'timezone_offset') {
+        const offset = parseInt(value, 10);
+        if (isNaN(offset) || offset < -12 || offset > 14) {
+          message.error('时区偏移必须在-12到14之间');
+          return;
+        }
+      }
+
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/system/settings/${key}`, {
         method: 'PUT',
@@ -609,6 +608,17 @@ const SystemConfig: React.FC = () => {
                   onChange={(checked) => handleUpdateSetting('ip_whitelist_enabled', checked.toString())}
                   checkedChildren="启用"
                   unCheckedChildren="停用"
+                />
+              </Form.Item>
+              <Form.Item 
+                label="时区偏移（小时）"
+                extra="设置时区偏移小时数，例如：北京时间为8，纽约为-5，修改后需要重启后端服务"
+              >
+                <Input
+                  type="number"
+                  value={settings.timezone_offset || '8'}
+                  onChange={(e) => handleUpdateSetting('timezone_offset', e.target.value)}
+                  placeholder="请输入时区偏移，例如：8"
                 />
               </Form.Item>
             </Form>

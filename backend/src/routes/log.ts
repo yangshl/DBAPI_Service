@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { query, getBeijingTime } from '../config/database';
+import { query, getBeijingTime, getTimezoneOffset } from '../config/database';
 import { logger } from '../utils/logger';
 import { authenticateToken, AuthRequest, authorizeRoles } from '../middleware/auth';
 
@@ -111,9 +111,8 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 
 router.get('/stats', authorizeRoles('admin'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const thirtyDaysAgoStr = getBeijingTime().replace(/\s[\d:]+$/, ' 00:00:00');
+    const timezoneOffset = await getTimezoneOffset();
+    const thirtyDaysAgoStr = getBeijingTime(timezoneOffset).replace(/\s[\d:]+$/, ' 00:00:00');
     
     const stats = await query(`
       SELECT

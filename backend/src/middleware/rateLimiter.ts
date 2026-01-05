@@ -21,7 +21,7 @@ export const rateLimiter = rateLimit({
       return realIp.trim();
     }
     
-    return req.ip;
+    return req.ip || 'unknown';
   }
 });
 
@@ -47,6 +47,6 @@ export const loginRateLimiter = rateLimit({
       return realIp.trim();
     }
     
-    return req.ip;
+    return req.ip || 'unknown';
   }
 });

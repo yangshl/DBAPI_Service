@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { query, getBeijingTime } from '../config/database';
+import { query, getBeijingTime, getTimezoneOffset } from '../config/database';
 import { logger } from '../utils/logger';
 import { authenticateToken, AuthRequest, authorizeRoles } from '../middleware/auth';
 import { databasePool } from '../services/databasePool';
@@ -94,9 +94,11 @@ router.post('/', authorizeRoles('admin'), async (req: AuthRequest, res: Response
       return;
     }
 
+    const timezoneOffset = await getTimezoneOffset();
+
     const result = await query(
-      'INSERT INTO datasources (name, type, host, port, database_name, username, password, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [name, type, host, port, database_name, username, password, status || 'active', req.userId]
+      'INSERT INTO datasources (name, type, host, port, database_name, username, password, status, created_by, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, type, host, port, database_name, username, password, status || 'active', req.userId, timezoneOffset]
     );
 
     const datasourceId = result.insertId;
@@ -111,8 +113,8 @@ router.post('/', authorizeRoles('admin'), async (req: AuthRequest, res: Response
     }, `ds_${datasourceId}`);
 
     await query(
-      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.userId, 'create', 'datasource', datasourceId, getClientIp(req), req.get('user-agent'), 'success', getBeijingTime()]
+      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.userId, 'create', 'datasource', datasourceId, getClientIp(req), req.get('user-agent'), 'success', getBeijingTime(), timezoneOffset]
     );
 
     logger.info(`Datasource created: ${name} by ${req.username}`);
@@ -149,9 +151,11 @@ router.put('/:id', authorizeRoles('admin'), async (req: AuthRequest, res: Respon
     const updatePassword = password ?? existing.password;
     const updateStatus = status ?? existing.status;
 
+    const timezoneOffset = await getTimezoneOffset();
+
     await query(
-      'UPDATE datasources SET name = ?, type = ?, host = ?, port = ?, database_name = ?, username = ?, password = ?, status = ? WHERE id = ?',
-      [updateName, updateType, updateHost, updatePort, updateDatabaseName, updateUsername, updatePassword, updateStatus, id]
+      'UPDATE datasources SET name = ?, type = ?, host = ?, port = ?, database_name = ?, username = ?, password = ?, status = ?, timezone_offset = ? WHERE id = ?',
+      [updateName, updateType, updateHost, updatePort, updateDatabaseName, updateUsername, updatePassword, updateStatus, timezoneOffset, id]
     );
 
     if (type || host || port || username || password || database_name) {
@@ -168,8 +172,8 @@ router.put('/:id', authorizeRoles('admin'), async (req: AuthRequest, res: Respon
     }
 
     await query(
-      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.userId, 'update', 'datasource', id, getClientIp(req), req.get('user-agent'), 'success', getBeijingTime()]
+      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.userId, 'update', 'datasource', id, getClientIp(req), req.get('user-agent'), 'success', getBeijingTime(timezoneOffset), timezoneOffset]
     );
 
     logger.info(`Datasource updated: ${id} by ${req.username}`);

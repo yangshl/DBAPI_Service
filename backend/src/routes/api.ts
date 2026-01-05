@@ -1,5 +1,5 @@
 import { Router, Response, NextFunction } from 'express';
-import { query, getBeijingTime } from '../config/database';
+import { query, getBeijingTime, getTimezoneOffset } from '../config/database';
 import { logger } from '../utils/logger';
 import { authenticateApiToken, AuthRequest, authorizeRoles } from '../middleware/auth';
 import { checkIpWhitelist } from '../middleware/ipWhitelist';
@@ -141,11 +141,12 @@ router.post('/', authorizeRoles('admin', 'developer'), async (req: AuthRequest, 
       return;
     }
 
-    const now = getBeijingTime();
+    const timezoneOffset = await getTimezoneOffset();
+    const now = getBeijingTime(timezoneOffset);
 
     const result = await query(
-      'INSERT INTO apis (name, path, method, description, datasource_id, sql_template, status, require_auth, category, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [name, path, method || 'GET', description, datasource_id, sql_template, status || 'draft', require_auth, category, req.userId, now, now]
+      'INSERT INTO apis (name, path, method, description, datasource_id, sql_template, status, require_auth, category, created_by, created_at, updated_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, path, method || 'GET', description, datasource_id, sql_template, status || 'draft', require_auth, category, req.userId, now, now, timezoneOffset]
     );
 
     const apiId = result.insertId;
@@ -160,8 +161,8 @@ router.post('/', authorizeRoles('admin', 'developer'), async (req: AuthRequest, 
     }
 
     await query(
-      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.userId, 'create', 'api', apiId, getClientIp(req), req.get('user-agent'), 'success', now]
+      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.userId, 'create', 'api', apiId, getClientIp(req), req.get('user-agent'), 'success', now, timezoneOffset]
     );
 
     logger.info(`API created: ${name} by ${req.username}`);
@@ -181,11 +182,12 @@ router.put('/:id', authorizeRoles('admin', 'developer'), async (req: AuthRequest
     const { id } = req.params;
     const { name, path, method, description, datasource_id, sql_template, status, require_auth, category, parameters = [] } = req.body;
 
-    const now = getBeijingTime();
+    const timezoneOffset = await getTimezoneOffset();
+    const now = getBeijingTime(timezoneOffset);
 
     await query(
-      'UPDATE apis SET name = ?, path = ?, method = ?, description = ?, datasource_id = ?, sql_template = ?, status = ?, require_auth = ?, category = ?, updated_at = ? WHERE id = ?',
-      [name, path, method, description, datasource_id, sql_template, status, require_auth, category, now, id]
+      'UPDATE apis SET name = ?, path = ?, method = ?, description = ?, datasource_id = ?, sql_template = ?, status = ?, require_auth = ?, category = ?, updated_at = ?, timezone_offset = ? WHERE id = ?',
+      [name, path, method, description, datasource_id, sql_template, status, require_auth, category, now, timezoneOffset, id]
     );
 
     let parametersToSave = parameters;
@@ -214,8 +216,8 @@ router.put('/:id', authorizeRoles('admin', 'developer'), async (req: AuthRequest
     }
 
     await query(
-      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.userId, 'update', 'api', id, getClientIp(req), req.get('user-agent'), 'success', now]
+      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.userId, 'update', 'api', id, getClientIp(req), req.get('user-agent'), 'success', now, timezoneOffset]
     );
 
     logger.info(`API updated: ${id} by ${req.username}`);
@@ -230,13 +232,14 @@ router.delete('/:id', authorizeRoles('admin', 'developer'), async (req: AuthRequ
   try {
     const { id } = req.params;
 
-    const now = getBeijingTime();
+    const timezoneOffset = await getTimezoneOffset();
+    const now = getBeijingTime(timezoneOffset);
 
     await query('DELETE FROM apis WHERE id = ?', [id]);
 
     await query(
-      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.userId, 'delete', 'api', id, getClientIp(req), req.get('user-agent'), 'success', now]
+      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.userId, 'delete', 'api', id, getClientIp(req), req.get('user-agent'), 'success', now, timezoneOffset]
     );
 
     logger.info(`API deleted: ${id} by ${req.username}`);
@@ -360,7 +363,12 @@ router.get('/:id/access-logs', authorizeRoles('admin', 'developer'), async (req:
 
     const countSql = sql.split('ORDER BY')[0].replace(/SELECT.*FROM/, 'SELECT COUNT(*) as total FROM');
     const countParams = params.slice(0, -2);
-    const [{ total }] = await query(countSql, countParams);
+    logger.info('Count SQL:', countSql);
+    logger.info('Count params:', JSON.stringify(countParams));
+    const countResult = await query(countSql, countParams);
+    logger.info('Count result:', JSON.stringify(countResult));
+    const total = countResult && countResult.length > 0 ? (countResult[0]?.total || 0) : 0;
+    logger.info('Total count:', total);
 
     res.json({
       data: logs,

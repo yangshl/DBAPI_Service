@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dbapi-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - LOG_LEVEL=info
+    volumes:
+      - backend-data:/app/data
+      - ./backend/dbapi_service.db:/app/dbapi_service.db
+    networks:
+      - dbapi-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_BACKEND_PROTOCOL=http
+        - VITE_BACKEND_HOST=backend
+        - VITE_BACKEND_PORT=3000
+    container_name: dbapi-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - dbapi-network
+    restart: unless-stopped
+
+volumes:
+  backend-data:
+
+networks:
+  dbapi-network:
+    driver: bridge

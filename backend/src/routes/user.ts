@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { query, getBeijingTime } from '../config/database';
+import { query, getBeijingTime, getTimezoneOffset } from '../config/database';
 import { logger } from '../utils/logger';
 import { authenticateToken, AuthRequest, authorizeRoles } from '../middleware/auth';
 import { getClientIp } from '../utils/ipHelper';
@@ -237,7 +237,8 @@ router.post('/', authorizeRoles('admin'), async (req: AuthRequest, res: Response
     const bcrypt = require('bcryptjs');
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const now = getBeijingTime();
+    const timezoneOffset = await getTimezoneOffset();
+    const now = getBeijingTime(timezoneOffset);
 
     const result = await query(
       'INSERT INTO users (username, password, email, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -245,8 +246,8 @@ router.post('/', authorizeRoles('admin'), async (req: AuthRequest, res: Response
     );
 
     await query(
-      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.userId, 'create', 'user', result.lastID, getClientIp(req), req.get('user-agent'), 'success', now]
+      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.userId, 'create', 'user', result.lastID, getClientIp(req), req.get('user-agent'), 'success', now, timezoneOffset]
     );
 
     logger.info(`User created: ${username} by ${req.username}`);
@@ -341,14 +342,16 @@ router.delete('/:id/token', async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
+    const timezoneOffset = await getTimezoneOffset();
+
     await query(
       'UPDATE users SET api_token = NULL, token_expires_at = NULL, token_permissions = NULL, updated_at = ? WHERE id = ?',
-      [getBeijingTime(), id]
+      [getBeijingTime(timezoneOffset), id]
     );
 
     await query(
-      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.userId, 'delete', 'user_token', id, getClientIp(req), req.get('user-agent'), 'success', getBeijingTime()]
+      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.userId, 'delete', 'user_token', id, getClientIp(req), req.get('user-agent'), 'success', getBeijingTime(timezoneOffset), timezoneOffset]
     );
 
     logger.info(`Token deleted for user: ${id} by ${req.username}`);

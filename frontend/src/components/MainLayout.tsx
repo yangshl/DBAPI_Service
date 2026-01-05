@@ -23,6 +23,7 @@ interface MainLayoutProps {
     role: string;
   };
   onLogout: () => void;
+  children?: React.ReactNode;
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ user, onLogout }) => {

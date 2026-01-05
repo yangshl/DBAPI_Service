@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { query, getBeijingTime } from '../config/database';
+import { query, getBeijingTime, getTimezoneOffset } from '../config/database';
 import { logger } from '../utils/logger';
 import { databasePool } from '../services/databasePool';
 import { AuthRequest, optionalApiTokenAuth } from '../middleware/auth';
@@ -130,20 +130,23 @@ router.all('/:path(*)', async (req: AuthRequest, res: Response): Promise<void> =
       const ipAddress = getClientIp(req);
       const userAgent = req.get('user-agent') || '';
       const allParams = { ...req.params, ...req.query, ...req.body };
+      const timezoneOffset = await getTimezoneOffset();
+      const now = getBeijingTime(timezoneOffset);
+      const today = now.split(' ')[0];
 
       await query(`
-        INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, error_message, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [api.id, req.userId || null, ipAddress, userAgent, JSON.stringify(allParams), 503, 0, 'failure', 'Datasource is not active', getBeijingTime()]);
+        INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, error_message, created_at, timezone_offset)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [api.id, req.userId || null, ipAddress, userAgent, JSON.stringify(allParams), 503, 0, 'failure', 'Datasource is not active', now, timezoneOffset]);
 
       await query(`
         INSERT INTO api_call_stats (api_id, call_count, success_count, failure_count, avg_response_time, last_called_at, date)
-        VALUES (?, 1, 0, 1, 0, DATETIME('now'), DATE('now'))
+        VALUES (?, 1, 0, 1, 0, ?, ?)
         ON CONFLICT(api_id, date) DO UPDATE SET
           call_count = call_count + 1,
           failure_count = failure_count + 1,
-          last_called_at = DATETIME('now')
-      `, [api.id]);
+          last_called_at = ?
+      `, [api.id, now, today, now]);
 
       res.status(503).json({ 
         success: false,
@@ -166,20 +169,23 @@ router.all('/:path(*)', async (req: AuthRequest, res: Response): Promise<void> =
           const ipAddress = getClientIp(req);
           const userAgent = req.get('user-agent') || '';
           const allParams = { ...req.params, ...req.query, ...req.body };
+          const timezoneOffset = await getTimezoneOffset();
+          const now = getBeijingTime(timezoneOffset);
+          const today = now.split(' ')[0];
 
         await query(`
-          INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, error_message, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [api.id, null, ipAddress, userAgent, JSON.stringify(allParams), 401, 0, 'failure', 'Authentication required', getBeijingTime()]);
+          INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, error_message, created_at, timezone_offset)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [api.id, null, ipAddress, userAgent, JSON.stringify(allParams), 401, 0, 'failure', 'Authentication required', now, timezoneOffset]);
 
         await query(`
           INSERT INTO api_call_stats (api_id, call_count, success_count, failure_count, avg_response_time, last_called_at, date)
-          VALUES (?, 1, 0, 1, 0, DATETIME('now'), DATE('now'))
+          VALUES (?, 1, 0, 1, 0, ?, ?)
           ON CONFLICT(api_id, date) DO UPDATE SET
             call_count = call_count + 1,
             failure_count = failure_count + 1,
-            last_called_at = DATETIME('now')
-        `, [api.id]);
+            last_called_at = ?
+        `, [api.id, now, today, now]);
 
         res.status(401).json({ error: 'Authentication required' });
         return;
@@ -190,20 +196,23 @@ router.all('/:path(*)', async (req: AuthRequest, res: Response): Promise<void> =
         const ipAddress = getClientIp(req);
         const userAgent = req.get('user-agent') || '';
         const allParams = { ...req.params, ...req.query, ...req.body };
+        const timezoneOffset = await getTimezoneOffset();
+        const now = getBeijingTime(timezoneOffset);
+        const today = now.split(' ')[0];
 
         await query(`
-          INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, error_message, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [api.id, req.userId, ipAddress, userAgent, JSON.stringify(allParams), 403, 0, 'failure', 'Permission denied', getBeijingTime()]);
+          INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, error_message, created_at, timezone_offset)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [api.id, req.userId, ipAddress, userAgent, JSON.stringify(allParams), 403, 0, 'failure', 'Permission denied', now, timezoneOffset]);
 
         await query(`
           INSERT INTO api_call_stats (api_id, call_count, success_count, failure_count, avg_response_time, last_called_at, date)
-          VALUES (?, 1, 0, 1, 0, DATETIME('now'), DATE('now'))
+          VALUES (?, 1, 0, 1, 0, ?, ?)
           ON CONFLICT(api_id, date) DO UPDATE SET
             call_count = call_count + 1,
             failure_count = failure_count + 1,
-            last_called_at = DATETIME('now')
-        `, [api.id]);
+            last_called_at = ?
+        `, [api.id, now, today, now]);
 
         res.status(403).json({ error: 'Permission denied' });
         return;
@@ -221,20 +230,23 @@ router.all('/:path(*)', async (req: AuthRequest, res: Response): Promise<void> =
     if (!validationResult.valid) {
       const ipAddress = getClientIp(req);
       const userAgent = req.get('user-agent') || '';
+      const timezoneOffset = await getTimezoneOffset();
+      const now = getBeijingTime(timezoneOffset);
+      const today = now.split(' ')[0];
 
       await query(`
-        INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, error_message, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [api.id, req.userId || null, ipAddress, userAgent, JSON.stringify(allParams), 400, 0, 'failure', JSON.stringify(validationResult.errors), getBeijingTime()]);
+        INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, error_message, created_at, timezone_offset)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [api.id, req.userId || null, ipAddress, userAgent, JSON.stringify(allParams), 400, 0, 'failure', JSON.stringify(validationResult.errors), now, timezoneOffset]);
 
       await query(`
         INSERT INTO api_call_stats (api_id, call_count, success_count, failure_count, avg_response_time, last_called_at, date)
-        VALUES (?, 1, 0, 1, 0, DATETIME('now'), DATE('now'))
+        VALUES (?, 1, 0, 1, 0, ?, ?)
         ON CONFLICT(api_id, date) DO UPDATE SET
           call_count = call_count + 1,
           failure_count = failure_count + 1,
-          last_called_at = DATETIME('now')
-      `, [api.id]);
+          last_called_at = ?
+      `, [api.id, now, today, now]);
 
       res.status(400).json({
         success: false,
@@ -300,21 +312,24 @@ router.all('/:path(*)', async (req: AuthRequest, res: Response): Promise<void> =
     const userId = req.userId || null;
     const ipAddress = getClientIp(req);
     const userAgent = req.get('user-agent') || '';
+    const timezoneOffset = await getTimezoneOffset();
+    const now = getBeijingTime(timezoneOffset);
+    const today = now.split(' ')[0];
 
     await query(`
-      INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [api.id, userId, ipAddress, userAgent, JSON.stringify(allParams), 200, executionTime, 'success', getBeijingTime()]);
+      INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, created_at, timezone_offset)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [api.id, userId, ipAddress, userAgent, JSON.stringify(allParams), 200, executionTime, 'success', now, timezoneOffset]);
 
     await query(`
       INSERT INTO api_call_stats (api_id, call_count, success_count, failure_count, avg_response_time, last_called_at, date)
-      VALUES (?, 1, 1, 0, ?, DATETIME('now'), DATE('now'))
+      VALUES (?, 1, 1, 0, ?, ?, ?)
       ON CONFLICT(api_id, date) DO UPDATE SET
         call_count = call_count + 1,
         success_count = success_count + 1,
         avg_response_time = (avg_response_time * (call_count - 1) + ?) / call_count,
-        last_called_at = DATETIME('now')
-    `, [api.id, executionTime, executionTime]);
+        last_called_at = ?
+    `, [api.id, executionTime, now, today, executionTime, now]);
 
     res.json({
       success: true,
@@ -337,20 +352,23 @@ router.all('/:path(*)', async (req: AuthRequest, res: Response): Promise<void> =
         const userId = req.userId || null;
         const ipAddress = getClientIp(req);
         const userAgent = req.get('user-agent') || '';
+        const timezoneOffset = await getTimezoneOffset();
+        const now = getBeijingTime(timezoneOffset);
+        const today = now.split(' ')[0];
 
         await query(`
-          INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, error_message, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [apis[0].id, userId, ipAddress, userAgent, JSON.stringify(req.query), 500, 0, 'failure', error.message || 'Unknown error', getBeijingTime()]);
+          INSERT INTO api_access_logs (api_id, user_id, ip_address, user_agent, request_params, response_status, execution_time, status, error_message, created_at, timezone_offset)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [apis[0].id, userId, ipAddress, userAgent, JSON.stringify(req.query), 500, 0, 'failure', error.message || 'Unknown error', now, timezoneOffset]);
 
         await query(`
           INSERT INTO api_call_stats (api_id, call_count, success_count, failure_count, avg_response_time, last_called_at, date)
-          VALUES (?, 1, 0, 1, 0, DATETIME('now'), DATE('now'))
+          VALUES (?, 1, 0, 1, 0, ?, ?)
           ON CONFLICT(api_id, date) DO UPDATE SET
             call_count = call_count + 1,
             failure_count = failure_count + 1,
-            last_called_at = DATETIME('now')
-        `, [apis[0].id]);
+            last_called_at = ?
+        `, [apis[0].id, now, today, now]);
       }
     } catch (logError) {
       logger.error('Failed to log API call failure:', logError);

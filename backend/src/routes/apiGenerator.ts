@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { query, run, getBeijingTime } from '../config/database';
+import { query, run, getBeijingTime, getTimezoneOffset } from '../config/database';
 import { logger } from '../utils/logger';
 import { authenticateApiToken, AuthRequest, authorizeRoles } from '../middleware/auth';
 import { schemaIntrospector } from '../services/schemaIntrospector';
@@ -173,9 +173,11 @@ router.post('/generate', authorizeRoles('admin', 'developer'), async (req: AuthR
       });
     }
 
+    const timezoneOffset = await getTimezoneOffset();
+
     await run(
-      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.userId, 'auto_generate_apis', 'datasource', datasourceId, getClientIp(req), req.get('user-agent'), 'success', getBeijingTime()]
+      'INSERT INTO operation_logs (user_id, action, resource_type, resource_id, ip_address, user_agent, status, created_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.userId, 'auto_generate_apis', 'datasource', datasourceId, getClientIp(req), req.get('user-agent'), 'success', getBeijingTime(timezoneOffset), timezoneOffset]
     );
 
     logger.info(`Auto-generated ${createdAPIs.length} APIs for table ${tableName} by ${req.username}`);

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { query, getBeijingTime } from '../config/database';
+import { query, getBeijingTime, getTimezoneOffset } from '../config/database';
 import { logger } from '../utils/logger';
 import { authenticateToken, AuthRequest } from '../middleware/auth';
 import { loginRateLimiter } from '../middleware/rateLimiter';
@@ -70,9 +70,11 @@ router.post('/login', loginRateLimiter, async (req: Request, res: Response): Pro
       { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any }
     );
 
+    const timezoneOffset = await getTimezoneOffset();
+
     await query(
-      'INSERT INTO operation_logs (user_id, action, resource_type, ip_address, user_agent, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [user.id, 'login', 'user', getClientIp(req), req.get('user-agent'), 'success', getBeijingTime()]
+      'INSERT INTO operation_logs (user_id, action, resource_type, ip_address, user_agent, status, created_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [user.id, 'login', 'user', getClientIp(req), req.get('user-agent'), 'success', getBeijingTime(timezoneOffset), timezoneOffset]
     );
 
     logger.info(`User logged in: ${username}`);
@@ -93,9 +95,11 @@ router.post('/login', loginRateLimiter, async (req: Request, res: Response): Pro
 
 router.post('/logout', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const timezoneOffset = await getTimezoneOffset();
+
     await query(
-      'INSERT INTO operation_logs (user_id, action, resource_type, ip_address, user_agent, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [req.userId, 'logout', 'user', getClientIp(req), req.get('user-agent'), 'success', getBeijingTime()]
+      'INSERT INTO operation_logs (user_id, action, resource_type, ip_address, user_agent, status, created_at, timezone_offset) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.userId, 'logout', 'user', getClientIp(req), req.get('user-agent'), 'success', getBeijingTime(timezoneOffset), timezoneOffset]
     );
 
     logger.info(`User logged out: ${req.username}`);

@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { query } from '../config/database';
+import { query, getBeijingTime, getTimezoneOffset } from '../config/database';
 import { logger } from '../utils/logger';
 import { authenticateToken, AuthRequest, authorizeRoles } from '../middleware/auth';
 
@@ -14,11 +14,13 @@ router.get('/dashboard', async (req: AuthRequest, res: Response): Promise<void> 
     const [totalUsers] = await query('SELECT COUNT(*) as count FROM users');
     const [totalCalls] = await query('SELECT SUM(call_count) as total FROM api_call_stats');
 
+    const now = getBeijingTime();
+    const today = now.split(' ')[0];
     const [todayCalls] = await query(`
       SELECT COALESCE(SUM(call_count), 0) as total
       FROM api_call_stats
-      WHERE date = DATE('now')
-    `);
+      WHERE date = ?
+    `, [today]);
 
     const topApis = await query(`
       SELECT a.name, SUM(s.call_count) as total_calls

@@ -5,15 +5,25 @@ import { logger } from '../utils/logger';
 
 let db: Database | null = null;
 
-export function getBeijingTime(): string {
+export function getBeijingTime(timezoneOffset: number = 8): string {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const targetTime = new Date(utc + (3600000 * timezoneOffset));
+  
+  const year = targetTime.getFullYear();
+  const month = String(targetTime.getMonth() + 1).padStart(2, '0');
+  const day = String(targetTime.getDate()).padStart(2, '0');
+  const hours = String(targetTime.getHours()).padStart(2, '0');
+  const minutes = String(targetTime.getMinutes()).padStart(2, '0');
+  const seconds = String(targetTime.getSeconds()).padStart(2, '0');
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+export async function getTimezoneOffset(): Promise<number> {
+  if (!db) throw new Error('Database not initialized');
+  
+  const setting = await db.get('SELECT value FROM system_settings WHERE key = ?', ['timezone_offset']);
+  return setting ? parseInt(setting.value, 10) : 8;
 }
 
 export async function initDatabase(): Promise<void> {
@@ -24,9 +34,9 @@ export async function initDatabase(): Promise<void> {
     });
 
     await db.exec("PRAGMA time_zone = '+08:00'");
-    await db.exec("PRAGMA journal_mode = WAL");
     
     await createTables();
+    await addTimezoneOffsetFields();
     logger.info('Database initialized successfully');
   } catch (error) {
     logger.error('Failed to initialize database:', error);
@@ -346,7 +356,8 @@ async function initDefaultSystemSettings(): Promise<void> {
     { key: 'server_ip', value: '0.0.0.0', description: '服务器监听IP地址，0.0.0.0表示监听所有网卡' },
     { key: 'server_port', value: '3000', description: '服务器监听端口' },
     { key: 'server_domain', value: '', description: '服务器监听域名，留空则不限制域名' },
-    { key: 'ip_whitelist_enabled', value: 'false', description: '是否启用IP白名单' }
+    { key: 'ip_whitelist_enabled', value: 'false', description: '是否启用IP白名单' },
+    { key: 'timezone_offset', value: '8', description: '时区偏移小时数，例如：北京时间为8，纽约为-5' }
   ];
 
   for (const setting of defaultSettings) {
@@ -356,6 +367,31 @@ async function initDefaultSystemSettings(): Promise<void> {
         'INSERT INTO system_settings (key, value, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
         [setting.key, setting.value, setting.description, now, now]
       );
+    }
+  }
+}
+
+async function addTimezoneOffsetFields(): Promise<void> {
+  if (!db) throw new Error('Database not initialized');
+
+  const tables = [
+    { table: 'apis', field: 'timezone_offset' },
+    { table: 'datasources', field: 'timezone_offset' },
+    { table: 'api_access_logs', field: 'timezone_offset' },
+    { table: 'operation_logs', field: 'timezone_offset' }
+  ];
+
+  for (const { table, field } of tables) {
+    try {
+      const columns = await db.all(`PRAGMA table_info(${table})`);
+      const hasField = columns && columns.some((col: any) => col.name === field);
+      
+      if (!hasField) {
+        await db.exec(`ALTER TABLE ${table} ADD COLUMN ${field} INTEGER DEFAULT 8`);
+        logger.info(`Added ${field} field to ${table} table`);
+      }
+    } catch (error) {
+      logger.error(`Failed to add ${field} to ${table}:`, error);
     }
   }
 }
